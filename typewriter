@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+#shellcheck disable=SC2155
+
+# Declare associative arrays for min and max delays
+declare -A tw_min_delays=(
+  [xxxfast]=0
+  [xxfast]=1
+  [xfast]=3
+  [vfast]=7
+  [fast]=15
+  [normal]=25
+  [slow]=40
+  [vslow]=55
+  [xslow]=70
+  [xxslow]=85
+  [xxxslow]=99
+)
+
+declare -A tw_max_delays=(
+  [xxxfast]=0
+  [xxfast]=3
+  [xfast]=7
+  [vfast]=15
+  [fast]=25
+  [normal]=40
+  [slow]=55
+  [vslow]=70
+  [xslow]=85
+  [xxslow]=95
+  [xxxslow]=99
+)
+
+typewriter() {
+  #set -euo pipefail
+  local -- _VERSION='1.0.3'
+  local -- _PRG=typewriter
+  local -- LF=$'\n'
+  [ -t 2 ] && local -- RED=$'\033[0;31m' YELLOW=$'\033[0;33m' GREEN=$'\033[0;32m' NOCOLOR=$'\033[0m' || local -- RED='' YELLOW='' GREEN='' NOCOLOR=''
+  error() { local msg; for msg in "$@"; do >&2 printf '%s: %serror%s: %s\n' "$_PRG" "$RED" "$NOCOLOR" "$msg"; done; }
+  die() { local -i exitcode=1; if (($#)); then exitcode=$1; shift; fi; if (($#)); then error "$@"; fi; exit "$exitcode"; }
+  noarg() { if (($# < 2)) || [[ ${2:0:1} == '-' ]]; then die 2 "Missing argument for option '$1'"; fi; true; }
+  decp() { declare -p "$@" | sed 's/^declare -[a-zA-Z-]* //'; }
+  xcleanup() { local -i exitcode=${1:-0}; [[ -t 0 ]] && printf '\e[?25h'; exit "$exitcode"; }
+  trap 'xcleanup $?' SIGINT EXIT
+
+  usage() {
+    local -i exitcode=${1:-0}
+    local -- helptext=$(cat <<EOT
+$_PRG $_VERSION - Typewrite input to stdout
+
+Usage:
+  $_PRG [OPTIONS] text||<stdin
+
+  text    text to type (optional if reading from stdin)
+
+Options:
+  -s, --speed SPEED     Speed options:
+                          xxxfast xxfast xfast vfast fast
+                          normal
+                          slow vslow xslow xxslow xxxslow
+                        $(decp speed)
+  -i, --indent INDENT   Indent INDENT spaces
+                        $(decp indent)
+  -V, --version         Print version and exit
+                        $(decp _VERSION)
+  -h, --help            Display this help
+
+Examples:
+  $_PRG -s slow "This is a test."
+
+  echo "This is from stdin" | $_PRG -s slow
+
+  $_PRG -s slow -i 4 "This is a test with 4-space indent."
+
+EOT
+  )
+    ((exitcode)) && >&2 echo "$helptext" || echo "$helptext"
+    [[ -z "${1:-}" ]] && return
+    exit "$exitcode"
+  }
+
+  local -a Lines=()
+  local -- speed=normal line input
+  local -i min_delay=5 max_delay=15
+  local -i indent=0
+  local -- stdin_mode=0
+
+  while (($#)); do case "$1" in
+    -s|--speed)   noarg "$@"; shift; speed="$1" ;;
+    -i|--indent)  noarg "$@"; shift; indent="$1" ;;
+    -h|--help)    usage 0 ;;
+    -V|--version) echo "$_PRG $_VERSION"; exit 0 ;;
+    -[sihV]*) #shellcheck disable=SC2046 #split up single options
+                  set -- '' $(printf -- "-%c " $(grep -o . <<<"${1:1}")) "${@:2}";;
+    -*)           error "Invalid option '$1'"; return 22 ;;
+    *)            Lines+=( "${1//\\n/"$LF"}" ) ;;
+  esac; shift; done
+
+  # Check if we should read from stdin
+  if (( ${#Lines[@]} == 0 )) && ! [[ -t 0 ]]; then
+    while IFS= read -r input; do
+      Lines+=( "$input" )
+    done
+  fi
+
+  # Handle empty input
+  (( ${#Lines[@]} )) || { error 'No input provided'; return 1; }
+
+  # Set delays based on speed parameter
+  if [[ -n "${tw_min_delays[$speed]}" ]]; then
+    min_delay=${tw_min_delays[$speed]}
+    max_delay=${tw_max_delays[$speed]}
+  else
+    error "Invalid speed setting: '$speed'"
+    return 1
+  fi
+
+  for line in "${Lines[@]}"; do
+    # Process each character
+    while IFS= read -r -n1 char; do
+      if [[ -n "$char" ]]; then
+        echo -en "$char"
+        # delays between min-delay and max-delay milliseconds
+        sleep "0.$(printf "%02d" "$(
+            shuf --head-count=1 --input-range="$min_delay"-"$max_delay"
+          )")0$RANDOM"
+      elif [[ "$char" == "$LF" ]]; then
+        echo
+        sleep "0.05$RANDOM"
+      fi
+    done <<< "$(printf "%${indent}s" "")$line"
+    echo  # Final newline
+  done
+}
+
+# Only run main if the script is being executed directly (not sourced)
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  set -euo pipefail
+  typewriter "$@"
+else
+  true
+fi
+
+#fin
