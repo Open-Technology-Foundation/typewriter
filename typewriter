@@ -118,7 +118,7 @@ EOT
   local -i lenline=0 ccc=0
   for line in "${Lines[@]}"; do
     ccc=0
-    lenline=$((${#line} + 10))
+    lenline=$((${#line} + 20))
     readarray -t sleeps < <(
       awk -v count="$lenline" -v min="$min_delay" -v max="$max_delay" '
         BEGIN {
@@ -129,14 +129,15 @@ EOT
           }
         }'
     )
+    #>&2 decp lenline sleeps
     # Process each character
-    while IFS= read -r -n1 char; do
+    while IFS=$'\n' read -r -n1 char; do
       if [[ -n "$char" ]]; then
         echo -en "$char"
-        sleep "${sleeps[ccc+=1]}"
+        sleep "${sleeps[ccc++]}"
       elif [[ "$char" == "$LF" ]]; then
         echo
-        sleep "0.005$RANDOM"
+        sleep "${sleeps[ccc++]}"
       fi
     done <<< "$(printf "%${indent}s" "")$line"
     echo
