@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 #shellcheck disable=SC2155
 
+declare -x TW_SPEED=normal
+declare -ix TW_INDENT=0
+
 # Declare associative arrays for min and max delays
 declare -iA tw_min_delays=(
   [xxxfast]=0
@@ -32,9 +35,8 @@ declare -iA tw_max_delays=(
 
 typewriter() {
   #set -euo pipefail
-  local -- _VERSION='1.0.4'
-  local -- _PRG=typewriter
-  local -- LF=$'\n'
+  local -- _VERSION='1.0.5'
+  local -- _PRG=typewriter LF=$'\n'
   [ -t 2 ] && local -- RED=$'\033[0;31m' YELLOW=$'\033[0;33m' GREEN=$'\033[0;32m' NOCOLOR=$'\033[0m' || local -- RED='' YELLOW='' GREEN='' NOCOLOR=''
   error() { local msg; for msg in "$@"; do >&2 printf '%s: %serror%s: %s\n' "$_PRG" "$RED" "$NOCOLOR" "$msg"; done; }
   die() { local -i exitcode=1; if (($#)); then exitcode=$1; shift; fi; if (($#)); then error "$@"; fi; exit "$exitcode"; }
@@ -46,12 +48,12 @@ typewriter() {
   usage() {
     local -i exitcode=${1:-0}
     local -- helptext=$(cat <<EOT
-$_PRG $_VERSION - Typewriter-style input to stdout
+$_PRG $_VERSION - Typewriter-style output with variable speed and indent
 
 Usage:
   $_PRG [OPTIONS] text||<stdin
 
-  text    text to type (optional if reading from stdin)
+  text    text to 'type' (optional if reading from stdin)
 
 Options:
   -s, --speed SPEED     Speed options:
@@ -64,6 +66,10 @@ Options:
   -V, --version         Print version and exit
                         $(decp _VERSION)
   -h, --help            Display this help
+
+Environment:
+  TW_SPEED    If present, specifies SPEED default value
+  TW_INDENT   If present, specifies INDENT default value
 
 Examples:
   $_PRG -s slow "This is a test."
@@ -80,9 +86,9 @@ EOT
   }
 
   local -a Lines=()
-  local -- speed=normal line input
+  local -- speed=${TW_SPEED:-normal} line input
   local -i min_delay=5 max_delay=15
-  local -i indent=0
+  local -i indent=${TW_INDENT:-0}
 
   while (($#)); do case "$1" in
     -s|--speed)   noarg "$@"; shift; speed="${1,,}" ;;
@@ -101,7 +107,6 @@ EOT
       Lines+=( "$input" )
     done
   fi
-
   # Handle empty input
   (( ${#Lines[@]} )) || { error 'No input provided'; return 1; }
 
@@ -144,14 +149,14 @@ EOT
     sleep "0.005$RANDOM"
   done
 }
+declare -fx typewriter
 
-declare -x TW_SPEED
-declare -ix TW_INDENT
 
 tw() {
   typewriter --speed "${TW_SPEED:-fast}" --indent "${TW_INDENT:-0}" "$@"
 }
 declare -fx tw
+
 
 # Only run main if the script is being executed directly (not sourced)
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
@@ -160,5 +165,6 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
 else
   true
 fi
+
 
 #fin

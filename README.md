@@ -14,15 +14,14 @@ A bash script that simulates typewriter-style text output with customizable typi
 ## Installation
 
 ```bash
+# install into /usr/share
+cd /usr/share
 # Clone the repository
-git clone https://github.com/yourusername/typewriter.git
-
-# Make the script executable
-cd typewriter
-chmod +x typewriter
-
-# Optional: Move to a directory in your PATH
-sudo cp typewriter /usr/local/bin/
+sudo git clone https://github.com/Open-Technology-Foundation/typewriter
+# symlink to local bin
+sudo ln -fs /usr/share/typewriter/typewriter /usr/local/bin/typewriter
+# symlink for lazy typers
+sudo ln -fs /usr/share/typewriter/typewriter /usr/local/bin/tw
 ```
 
 ## Usage
@@ -80,7 +79,7 @@ typewriter "First line\nSecond line\nThird line"
 
 ## Requirements
 
-- Bash 4.0 or later
+- Bash 5.0 or later
 - Linux/Unix environment
 - Basic Unix utilities (shuf, printf)
 
@@ -90,8 +89,5 @@ This project is licensed under the GPL3 License - see the LICENSE file for detai
 
 ## Author
 
-Gary Dean
+Gary Dean garydean@yatti.id
 
-## Version
-
-Current version: 1.0.3
