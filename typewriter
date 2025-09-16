@@ -2,15 +2,22 @@
 # Typewriter - simulate typewriter-style text output with customizable speed and formatting
 # Copyright (C) 2023-2025 Gary Dean <garydean@yatti.id>
 # License: GPL-3.0-or-later
-#
 #shellcheck disable=SC2155
+set -euo pipefail
 
-# Default environment variables
-declare -x TW_SPEED=normal  # Default typing speed
-declare -ix TW_INDENT=0     # Default indentation
+# Script metadata
+readonly -- VERSION='1.0.11'
+readonly -- PRG0=$(readlink -en -- "$0")
+readonly -- PRG=${PRG0##*/}
+#shellcheck disable=SC2034  # PRGDIR may be used in sourced context
+readonly -- PRGDIR=${PRG0%/*}
+
+# Global variable declarations
+declare -i TW_INDENT=${TW_INDENT:-0}
+declare -- TW_SPEED=${TW_SPEED:-normal}
 
 # Declare associative arrays for min and max delays
-declare -iA tw_min_delays=(
+declare -iA TW_MIN_DELAYS=(
   [xxxfast]=0
   [xxfast]=1
   [xfast]=3
@@ -24,7 +31,7 @@ declare -iA tw_min_delays=(
   [xxxslow]=99
 )
 
-declare -iA tw_max_delays=(
+declare -iA TW_MAX_DELAYS=(
   [xxxfast]=0
   [xxfast]=3
   [xfast]=7
@@ -38,169 +45,274 @@ declare -iA tw_max_delays=(
   [xxxslow]=99
 )
 
-typewriter() {
-  # Main function that simulates typewriter-style output
-  # Takes optional parameters for speed, indentation, color, and formatting
-  # Returns 0 on success, non-zero on error
-  
-  #set -euo pipefail
-  local -- _VERSION='1.0.8'  # Current version - performance optimized
-  local -- _PRG=typewriter LF=$'\n'$'\n'
-  # Only define colors that are used, fix conditional logic
-  if [ -t 2 ]; then
-    local -- RED=$'\033[0;31m' NOCOLOR=$'\033[0m'
-  else
-    local -- RED='' NOCOLOR=''
-  fi
-  error() { local msg; for msg in "$@"; do >&2 printf '%s: %serror%s: %s\n' "$_PRG" "$RED" "$NOCOLOR" "$msg"; done; }
-  die() { local -i exitcode=1; if (($#)); then exitcode=$1; shift; fi; if (($#)); then error "$@"; fi; exit "$exitcode"; }
-  noarg() { if (($# < 2)) || [[ ${2:0:1} == '-' ]]; then die 2 "Missing argument for option '$1'"; fi; true; }
-  decp() { declare -p "$@" | sed 's/^declare -[a-zA-Z-]* //'; }
-  xcleanup() { printf '\033[0m'; }  # Reset color on exit
-  trap 'xcleanup' EXIT
+# Color definitions for terminal output
+if [[ -t 1 ]]; then
+  declare -- RED=$'\033[0;31m'
+  declare -- GREEN=$'\033[0;32m'
+  declare -- YELLOW=$'\033[0;33m'
+  declare -- CYAN=$'\033[0;36m'
+  declare -- NC=$'\033[0m'
+else
+  declare -- RED=''
+  declare -- GREEN=''
+  declare -- YELLOW=''
+  declare -- CYAN=''
+  declare -- NC=''
+fi
+readonly -- RED GREEN YELLOW CYAN NC
 
-  usage() {
-    local -i exitcode=${1:-0}
-    local -- helptext=$(cat <<EOT
-$_PRG $_VERSION - Typewriter-style output with variable speed and indent
+# --------------------------------------------------------------------------------
+# Utility functions
+# --------------------------------------------------------------------------------
+
+# Core message function using FUNCNAME for context
+_msg() {
+  local -- status="${FUNCNAME[1]}" prefix="$PRG" msg
+  case "$status" in
+    success) prefix+=": ${GREEN}✓${NC}" ;;
+    warn)    prefix+=": $YELLOW$status$NC" ;;
+    info)    prefix+=": $CYAN$status$NC" ;;
+    error)   prefix+=": $RED$status$NC" ;;
+    *)       prefix+=": $status" ;;
+  esac
+  for msg in "$@"; do printf '%s: %s\n' "$prefix" "$msg"; done
+}
+
+# Conditional output based on verbosity
+vecho() { ((VERBOSE)) || return 0; _msg "$@"; }
+success() { ((VERBOSE)) || return 0; >&2 _msg "$@"; }
+warn() { ((VERBOSE)) || return 0; >&2 _msg "$@"; }
+info() { ((VERBOSE)) || return 0; >&2 _msg "$@"; }
+
+# Unconditional output
+error() { >&2 _msg "$@"; }
+die() { (($# > 1)) && error "${@:2}"; exit "${1:-0}"; }
+
+# Validate argument presence
+noarg() {
+  if (($# < 2)) || [[ ${2:0:1} == '-' ]]; then
+    die 2 "Missing argument for option '$1'"
+  fi
+  true
+}
+
+# Debug print variable declaration
+decp() { declare -p "$@" | sed 's/^declare -[a-zA-Z-]* //'; }
+
+# Cleanup function for exit trap
+_cleanup() {
+  # Only reset color if output is to a terminal
+  if [[ -t 1 ]]; then
+    printf '\033[0m'  # Reset color on exit
+  fi
+  return 0
+}
+
+# --------------------------------------------------------------------------------
+# Business logic functions
+# --------------------------------------------------------------------------------
+
+# Display usage information
+usage() {
+  local -i exitcode=${1:-0}
+  cat <<EOT
+$PRG $VERSION - Typewriter-style output with variable speed and indent
 
 Usage:
-  $_PRG [OPTIONS] text||<stdin
+  $PRG [OPTIONS] text||<stdin
 
   text    text to 'type' (optional if reading from stdin)
 
 Options:
   -s, --speed SPEED     Speed options:
                           xxxfast xxfast xfast vfast fast
-                          normal
+                          normal (default)
                           slow vslow xslow xxslow xxxslow
-                        $(decp speed)
-  -i, --indent INDENT   Indent INDENT spaces
-                        $(decp indent)
+                        Current: $(decp TW_SPEED)
+  -i, --indent INDENT   Indent INDENT spaces (must be numeric)
+                        Current: $(decp TW_INDENT)
   -c, --color COLOR     ANSI color code (e.g., "31" for red,
-                        "32" for green, "33" for yellow)
+                        "32" for green, "33" for yellow,
+                        "1;32" for bold green)
   -n, --no-newline      Don't add newline after output
   -V, --version         Print version and exit
-                        $(decp _VERSION)
+                        $(decp VERSION)
   -h, --help            Display this help
 
 Environment:
-  TW_SPEED    If present, specifies SPEED default value
-  TW_INDENT   If present, specifies INDENT default value
+  TW_SPEED    Default speed if not specified (default: normal)
+  TW_INDENT   Default indent spaces if not specified (default: 0)
 
 Examples:
-  $_PRG -s slow "This is a test."
+  # Basic usage with different speeds
+  $PRG -s fast "This types quickly"
+  $PRG -s slow "This types slowly"
 
-  echo "This is from stdin" | $_PRG -s slow
+  # Using stdin input
+  echo "This is from stdin" | $PRG -s normal
+  cat file.txt | $PRG -s xxfast
 
-  $_PRG -s slow -i 4 "This is a test with 4-space indent."
-  
-  $_PRG -c 31 -s fast "This text will be red."
+  # Indentation and formatting
+  $PRG -i 4 "This has 4-space indent"
+  $PRG -c 32 "This is green text"
+  $PRG -c "1;31" "This is bold red text"
+
+  # Combined options
+  $PRG -s fast -i 2 -c 36 "Fast cyan text with indent"
+  $PRG -s slow -c 33 -n "Yellow text without newline"
+
+  # Using environment variables
+  export TW_SPEED=fast TW_INDENT=2
+  $PRG "Uses fast speed and 2-space indent"
+
+  # Multi-line text with literal newlines
+  $PRG "First line\\nSecond line\\nThird line"
 
 EOT
-  )
-    ((exitcode)) && >&2 echo "$helptext" || echo "$helptext"
-    [[ -z "${1:-}" ]] && return
-    exit "$exitcode"
-  }
+  exit "$exitcode"
+}
 
-  local -a Lines=()
-  local -- speed=${TW_SPEED:-normal} line input
-  local -i min_delay=5 max_delay=15
+# Main typewriter function
+typewriter() {
+  local -a lines=()
+  local -- speed=${TW_SPEED:-normal}
+  local -- line
+  local -i min_delay max_delay
   local -i indent=${TW_INDENT:-0}
-  local -- color="" # ANSI color code if specified
+  local -- color=''  # ANSI color code if specified
   local -i no_newline=0
+  local -i delay  # Declare once for efficiency
+  local -- LF=$'\n'
 
-  while (($#)); do case "$1" in
-    -s|--speed)    noarg "$@"; shift; speed="${1,,}" ;;
-    -i|--indent)   noarg "$@"; shift; indent="$1" ;;
-    -c|--color)    noarg "$@"; shift; color="$1" ;;
-    -n|--no-newline) no_newline=1 ;;
-    -h|--help)     usage 0 ;;
-    -V|--version)  echo "$_PRG $_VERSION"; exit 0 ;;
-    -[sicnhV]*) #shellcheck disable=SC2046 #split up single options
-                  set -- '' $(printf -- "-%c " $(grep -o . <<<"${1:1}")) "${@:2}";;
-    -*)           error "Invalid option '$1'"; return 22 ;;
-    *)            Lines+=( "${1//\\n/"$LF"}" ) ;;
-  esac; shift; done
+  # Argument parsing loop
+  while (($#)); do
+    case "$1" in
+      -s|--speed)
+        noarg "$@"
+        shift
+        speed="${1,,}"
+        ;;
+      -i|--indent)
+        noarg "$@"
+        shift
+        if [[ "$1" =~ ^[0-9]+$ ]]; then
+          indent="$1"
+        else
+          die 22 "Invalid indent value '$1' - must be a positive integer"
+        fi
+        ;;
+      -c|--color)
+        noarg "$@"
+        shift
+        color="$1"
+        ;;
+      -n|--no-newline)
+        no_newline=1
+        ;;
+      -h|--help)
+        usage 0
+        ;;
+      -V|--version)
+        echo "$PRG $VERSION"
+        exit 0
+        ;;
+      # Handle combined short options
+      -[sicnhV]*)
+        #shellcheck disable=SC2046  # Intentional word splitting
+        set -- '' $(printf -- "-%c " $(grep -o . <<<"${1:1}")) "${@:2}"
+        ;;
+      -*)
+        die 22 "Invalid option '$1'"
+        ;;
+      *)
+        lines+=("${1//\\n/"$LF"}")
+        ;;
+    esac
+    shift
+  done
 
   # Check if we should read from stdin
-  if (( ${#Lines[@]} == 0 )) && ! [[ -t 0 ]]; then
+  if ((${#lines[@]} == 0)) && ! [[ -t 0 ]]; then
     # More efficient stdin reading - read all input at once if possible
-    mapfile -t Lines
-    
-    # Fall back to line-by-line if mapfile fails
-    if (( ${#Lines[@]} == 0 )); then
+    readarray -t lines
+
+    # Fall back to line-by-line if readarray fails
+    if ((${#lines[@]} == 0)); then
       while IFS= read -r line; do
-        Lines+=("$line")
+        lines+=("$line")
       done
     fi
   fi
+
   # Handle empty input
-  (( ${#Lines[@]} )) || { error 'No input provided'; return 1; }
+  ((${#lines[@]})) || die 1 'No input provided'
 
   # Set delays based on speed parameter
-  if [[ -n "${tw_min_delays[$speed]}" ]]; then
-    min_delay=${tw_min_delays[$speed]}
-    max_delay=${tw_max_delays[$speed]}
-    # Set initial delay_ms based on speed
-    delay_ms=$((min_delay + max_delay)) # Average of min and max
+  if [[ -n "${TW_MIN_DELAYS[$speed]:-}" ]]; then
+    min_delay=${TW_MIN_DELAYS[$speed]}
+    max_delay=${TW_MAX_DELAYS[$speed]}
   else
-    error "Invalid speed setting: '$speed'"
-    return 1
+    die 22 "Invalid speed setting: '$speed'"
   fi
 
-  # Set color if specified - direct string for better performance
+  # Set color if specified
   [[ -n "$color" ]] && printf "\033[%sm" "$color"
 
   # Simple typewriter effect with dynamic speed
-  for i in "${!Lines[@]}"; do
-    local line="${Lines[i]}"
-    
+  for i in "${!lines[@]}"; do
+    line="${lines[i]}"
+
     # Add indentation if specified
-    if ((indent > 0)); then
-      printf "%${indent}s" ""
-    fi
-    
+    ((indent > 0)) && printf "%${indent}s" ""
+
     # Process each character
-    for ((j=0; j<${#line}; j++)); do
+    for ((j=0; j<${#line}; j+=1)); do
       # Print single character
-      echo -n "${line:j:1}"
-      
+      printf '%s' "${line:j:1}"
+
       # Sleep with random delay in the selected range
       # Skip delay for xxxfast speed (0 delay) for maximum performance
       if [[ "$speed" != "xxxfast" ]]; then
-        local delay=$((min_delay + (RANDOM % (max_delay - min_delay + 1))))
-        sleep 0.$(printf "%03d" $delay)
+        delay=$((min_delay + (RANDOM % (max_delay - min_delay + 1))))
+        sleep "0.$(printf "%03d" $delay)"
       fi
     done
-    
+
     # Don't add newline after the last line if --no-newline is specified
-    if (( i < ${#Lines[@]} - 1 )) || (( !no_newline )); then
+    if ((i < ${#lines[@]} - 1)) || ((no_newline == 0)); then
       echo
     fi
   done
-  
-  # Reset color if it was set - more efficient
+
+  # Reset color if it was set
   [[ -n "$color" ]] && printf "\033[0m"
+  return 0
 }
-declare -fx typewriter
 
-
+# Wrapper function that passes all arguments to typewriter with defaults
 tw() {
-  # Wrapper function that passes all arguments to typewriter with defaults
-  typewriter --speed "${TW_SPEED:-fast}" --indent "${TW_INDENT:-0}" "$@"
+  typewriter --speed "${TW_SPEED:-normal}" --indent "${TW_INDENT:-0}" "$@"
 }
-declare -fx tw
 
+# --------------------------------------------------------------------------------
+# Main execution
+# --------------------------------------------------------------------------------
 
-# Only run main if the script is being executed directly (not sourced)
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-  set -euo pipefail
+main() {
+  # Set up exit trap
+  trap '_cleanup' EXIT
+
+  # Execute typewriter with all arguments
   typewriter "$@"
-else
-  true
-fi
+  return 0
+}
 
+# Export functions if script is sourced
+if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+  declare -fx typewriter tw
+else
+  # Script is being executed directly
+  main "$@"
+fi
 
 #fin

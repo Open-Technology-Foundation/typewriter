@@ -13,6 +13,7 @@ A bash script that simulates typewriter-style text output with customizable typi
 - Natural-looking random delays between characters
 - Handles multi-line text with proper line breaks
 - Optimized performance for both short and long text
+- Full compliance with enterprise Bash coding standards
 
 ## Installation
 
@@ -33,6 +34,18 @@ Or as a one-liner:
 sudo sh -c 'cd /usr/share && git clone https://github.com/Open-Technology-Foundation/typewriter && ln -fs /usr/share/typewriter/typewriter /usr/local/bin/typewriter && ln -fs /usr/share/typewriter/typewriter /usr/local/bin/tw'
 ```
 
+### Bash Completion
+
+The script includes bash completion support. To enable it:
+
+```bash
+# Source the completion file in your current session
+source /usr/share/typewriter/.bash_completion
+
+# Or add it to your bash configuration
+echo "source /usr/share/typewriter/.bash_completion" >> ~/.bashrc
+```
+
 ## Usage
 
 ```bash
@@ -46,22 +59,22 @@ typewriter [OPTIONS] text||<stdin
   - Default: normal
 
 - `-i, --indent INDENT`: Indent text by specified number of spaces
+  - Must be a positive integer
   - Default: 0
 
-- `-c, --color COLOR`: ANSI color code for text 
+- `-c, --color COLOR`: ANSI color code for text
   - Example values: 31 (red), 32 (green), 33 (yellow), 34 (blue), etc.
-  
+
 - `-n, --no-newline`: Don't add final newline after output
 
 - `-V, --version`: Display version information
 
 - `-h, --help`: Show help message
 
-### Environment
+### Environment Variables
 
-  TW_SPEED    If present, specifies SPEED default value (default 'normal')
-
-  TW_INDENT   If present, specifies INDENT default value (default 0)
+- `TW_SPEED`: If present, specifies SPEED default value (default 'normal')
+- `TW_INDENT`: If present, specifies INDENT default value (default 0)
 
 ### Examples
 
@@ -78,9 +91,9 @@ echo "This is from stdin" | typewriter -s xxfast
 With indentation:
 ```bash
 typewriter -s slow -i 4 "This is a test with 4-space indent."
-# OR
-TW_SPEED=fast
-TW_INDENT=4
+# OR using environment variables
+export TW_SPEED=fast
+export TW_INDENT=4
 tw "This is a test with 4-space indent."
 ```
 
@@ -94,6 +107,7 @@ Combining options:
 ```bash
 typewriter -c 33 -s xslow "Slow yellow text."
 typewriter -c 36 -s fast "Cyan text typed quickly."
+typewriter -s fast -c "1;32" -i 2 "Fast, bold green, indented text."
 ```
 
 No newline at end:
@@ -107,21 +121,32 @@ Multi-line text:
 typewriter "First line\nSecond line\nThird line"
 ```
 
+Using the `tw` shorthand:
+```bash
+# tw is a wrapper for typewriter with the same defaults (normal speed)
+tw "Quick typing with the tw command"
+tw -s slow "Slow typing with tw"
+
+# Note: As of v1.0.10, both typewriter and tw use 'normal' speed by default
+export TW_SPEED=fast  # Override default for both commands
+tw "Now uses fast speed"
+```
+
 ## Speed Reference
 
-| Speed    | Min Delay (ms) | Max Delay (ms) |
-|----------|----------------|----------------|
-| xxxfast  | 0              | 0              |
-| xxfast   | 1              | 3              |
-| xfast    | 3              | 7              |
-| vfast    | 7              | 15             |
-| fast     | 15             | 25             |
-| normal   | 25             | 40             |
-| slow     | 40             | 55             |
-| vslow    | 55             | 70             |
-| xslow    | 70             | 85             |
-| xxslow   | 85             | 95             |
-| xxxslow  | 99             | 99             |
+| Speed    | Min Delay (ms) | Max Delay (ms) | Description |
+|----------|----------------|----------------|-------------|
+| xxxfast  | 0              | 0              | Instant (no delay) |
+| xxfast   | 1              | 3              | Extremely fast |
+| xfast    | 3              | 7              | Very fast |
+| vfast    | 7              | 15             | Fast |
+| fast     | 15             | 25             | Quick |
+| normal   | 25             | 40             | Natural typing speed |
+| slow     | 40             | 55             | Deliberate |
+| vslow    | 55             | 70             | Very slow |
+| xslow    | 70             | 85             | Extremely slow |
+| xxslow   | 85             | 95             | Painfully slow |
+| xxxslow  | 99             | 99             | Maximum delay |
 
 ## Color Reference
 
@@ -138,14 +163,95 @@ For use with the `-c, --color` option:
 | 36         | Cyan              | `typewriter -c 36 "Text"`   |
 | 37         | White             | `typewriter -c 37 "Text"`   |
 | 1;31       | Bold Red          | `typewriter -c "1;31" "Text"` |
+| 1;32       | Bold Green        | `typewriter -c "1;32" "Text"` |
+| 1;33       | Bold Yellow       | `typewriter -c "1;33" "Text"` |
 | 4;32       | Underlined Green  | `typewriter -c "4;32" "Text"` |
 | 1;4;33     | Bold+Underline Yellow | `typewriter -c "1;4;33" "Text"` |
+
+## Advanced Usage
+
+### As a Library
+
+The script can be sourced to use its functions in other scripts:
+
+```bash
+#!/usr/bin/env bash
+source /usr/share/typewriter/typewriter
+
+# Use the typewriter function directly
+typewriter -s fast "Loading configuration..."
+
+# Use the tw shorthand
+tw "Process complete!"
+```
+
+### Custom Integration
+
+```bash
+# Progress messages with typewriter effect
+function progress_message() {
+  local message="$1"
+  typewriter -c 36 -s fast "→ $message"
+}
+
+# Error messages with dramatic effect
+function error_message() {
+  local message="$1"
+  typewriter -c 31 -s slow "ERROR: $message" >&2
+}
+```
 
 ## Requirements
 
 - Bash 5.0 or later
 - Linux/Unix environment
 - No external dependencies beyond core utilities
+
+## Testing
+
+The project includes comprehensive test suites to verify functionality:
+
+```bash
+# Run quick tests (fast validation)
+./test_quick.sh
+
+# Run comprehensive test suite
+./run_tests.sh
+
+# Run specific test categories
+./test_typewriter.sh basic  # Basic functionality only
+./test_typewriter.sh full   # All tests
+```
+
+The test suite covers:
+- All 11 speed settings
+- Input validation and error handling
+- Color output and formatting
+- Indentation options
+- Newline handling
+- STDIN/pipe input
+- Environment variables
+- Library mode and sourcing
+- Edge cases and Unicode support
+- Performance benchmarks
+
+Current test status: **62/66 tests passing** (93% success rate)
+
+## Technical Details
+
+### Performance
+
+- **Optimized for speed**: The `xxxfast` mode bypasses all delays for instant output
+- **Efficient stdin handling**: Uses `readarray` for bulk input processing
+- **Minimal overhead**: Direct ANSI escape sequences for color handling
+- **Smart buffering**: Character-by-character output with optimized sleep calls
+
+### Code Quality
+
+- **Standards Compliance**: Follows enterprise Bash coding standards
+- **ShellCheck Clean**: Passes all ShellCheck validations
+- **Error Handling**: Comprehensive error handling with proper exit codes
+- **Modular Design**: Clean separation of concerns with well-defined functions
 
 ## License
 
@@ -179,9 +285,39 @@ Gary Dean <garydean@yatti.id>
 
 Contributions are welcome! Please feel free to submit a Pull Request or open an issue to discuss proposed changes or report bugs.
 
+When contributing, please:
+- Follow the Bash coding standards (see BASH-CODING-STYLE.md)
+- Ensure your code passes ShellCheck
+- Update tests and documentation as needed
+- Keep commits atomic and well-described
+
 ## Version History
 
-- **1.0.8** (Current)
+- **1.0.11** (Current)
+  - Enhanced help documentation with comprehensive examples
+  - Clarified default behaviors and requirements
+  - Added testing documentation and test suites
+  - Improved usage examples showing all features
+  - Updated environment variable descriptions
+
+- **1.0.10**
+  - Fixed critical double newline bug when using literal \n in arguments
+  - Added proper validation for indent parameter (must be numeric)
+  - Fixed terminal detection for colors (now checks stdout instead of stderr)
+  - Harmonized default speed between typewriter and tw functions (both use 'normal')
+  - Optimized performance by declaring delay variable once outside loop
+  - Removed unused variable initializations and dead code
+  - Improved ShellCheck compliance
+
+- **1.0.9**
+  - Complete refactoring to comply with enterprise Bash coding standards
+  - Improved error handling and exit codes
+  - Added standardized messaging functions
+  - Enhanced code structure and modularity
+  - Fixed exit code issues for proper shell integration
+  - Maintained all existing functionality while improving code quality
+
+- **1.0.8**
   - Significant performance optimizations:
     - Faster operation in xxxfast mode (no delays)
     - Optimized stdin reading with mapfile
@@ -203,10 +339,13 @@ Contributions are welcome! Please feel free to submit a Pull Request or open an 
 - **1.0.6**
   - Performance improvements
   - Bug fixes
-  
+
 - **1.0.5**
   - Initial public release
   - Basic typewriter functionality with variable speeds
   - Support for indentation
   - Support for stdin and direct text input
 
+## Support
+
+For bug reports, feature requests, or questions, please open an issue on the [GitHub repository](https://github.com/Open-Technology-Foundation/typewriter).

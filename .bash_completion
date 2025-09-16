@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Bash completion for typewriter and tw commands
+# Copyright (C) 2023-2025 Gary Dean <garydean@yatti.id>
+# License: GPL-3.0-or-later
+
+_typewriter_completion() {
+    local cur prev opts speeds colors
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    # Available options
+    opts="-s --speed -i --indent -c --color -n --no-newline -V --version -h --help"
+    
+    # Available speeds
+    speeds="xxxfast xxfast xfast vfast fast normal slow vslow xslow xxslow xxxslow"
+    
+    # Common ANSI color codes
+    colors="30 31 32 33 34 35 36 37 1;31 1;32 1;33 1;34 1;35 1;36 1;37 4;31 4;32 4;33 4;34 4;35 4;36 4;37"
+
+    case "${prev}" in
+        -s|--speed)
+            COMPREPLY=( $(compgen -W "${speeds}" -- ${cur}) )
+            return 0
+            ;;
+        -i|--indent)
+            # Complete with common indent values
+            COMPREPLY=( $(compgen -W "0 2 4 8 16" -- ${cur}) )
+            return 0
+            ;;
+        -c|--color)
+            COMPREPLY=( $(compgen -W "${colors}" -- ${cur}) )
+            return 0
+            ;;
+        *)
+            ;;
+    esac
+
+    # Complete with available options
+    if [[ ${cur} == -* ]]; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+
+    # No completion for text arguments
+    return 0
+}
+
+# Register completion for both typewriter and tw commands
+complete -F _typewriter_completion typewriter
+complete -F _typewriter_completion tw
