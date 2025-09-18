@@ -36,7 +36,7 @@ sudo sh -c 'cd /usr/share && git clone https://github.com/Open-Technology-Founda
 
 ### Bash Completion
 
-The script includes bash completion support. To enable it:
+The script includes bash completion support for both `typewriter` and `tw` commands. To enable it:
 
 ```bash
 # Source the completion file in your current session
@@ -45,6 +45,12 @@ source /usr/share/typewriter/.bash_completion
 # Or add it to your bash configuration
 echo "source /usr/share/typewriter/.bash_completion" >> ~/.bashrc
 ```
+
+The bash completion provides:
+- Tab completion for all command options (`-s`, `-i`, `-c`, `-n`, `-V`, `-h` and their long forms)
+- Speed name completion (xxxfast, xxfast, xfast, vfast, fast, normal, slow, vslow, xslow, xxslow, xxxslow)
+- Common indent value suggestions (0-10, 12, 16, 20)
+- ANSI color code suggestions (30-37 for basic colors, with bold and underline variants)
 
 ## Usage
 
@@ -293,7 +299,13 @@ When contributing, please:
 
 ## Version History
 
-- **1.0.11** (Current)
+- **1.0.12** (Current)
+  - Added bash completion support for `typewriter` and `tw` commands
+  - Completion includes all options, speed values, indent suggestions, and color codes
+  - Fixed ShellCheck warnings in completion script using mapfile
+  - Enhanced README with detailed bash completion documentation
+
+- **1.0.11**
   - Enhanced help documentation with comprehensive examples
   - Clarified default behaviors and requirements
   - Added testing documentation and test suites
