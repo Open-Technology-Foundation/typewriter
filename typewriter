@@ -2,15 +2,16 @@
 # Typewriter - simulate typewriter-style text output with customizable speed and formatting
 # Copyright (C) 2023-2025 Gary Dean <garydean@yatti.id>
 # License: GPL-3.0-or-later
-#shellcheck disable=SC2155
 set -euo pipefail
 
+# Recommended shopt settings
+shopt -s inherit_errexit shift_verbose extglob nullglob
+
 # Script metadata
-readonly -- VERSION='1.0.11'
-readonly -- PRG0=$(readlink -en -- "$0")
-readonly -- PRG=${PRG0##*/}
-#shellcheck disable=SC2034  # PRGDIR may be used in sourced context
-readonly -- PRGDIR=${PRG0%/*}
+VERSION='1.0.11'
+SCRIPT_PATH=$(readlink -en -- "$0")  # Full path to script
+SCRIPT_NAME=${SCRIPT_PATH##*/}       # Script basename
+readonly -- VERSION SCRIPT_PATH SCRIPT_NAME
 
 # Global variable declarations
 declare -i TW_INDENT=${TW_INDENT:-0}
@@ -48,44 +49,24 @@ declare -iA TW_MAX_DELAYS=(
 # Color definitions for terminal output
 if [[ -t 1 ]]; then
   declare -- RED=$'\033[0;31m'
-  declare -- GREEN=$'\033[0;32m'
-  declare -- YELLOW=$'\033[0;33m'
-  declare -- CYAN=$'\033[0;36m'
   declare -- NC=$'\033[0m'
 else
   declare -- RED=''
-  declare -- GREEN=''
-  declare -- YELLOW=''
-  declare -- CYAN=''
   declare -- NC=''
 fi
-readonly -- RED GREEN YELLOW CYAN NC
+readonly -- RED NC
 
 # --------------------------------------------------------------------------------
 # Utility functions
 # --------------------------------------------------------------------------------
 
-# Core message function using FUNCNAME for context
-_msg() {
-  local -- status="${FUNCNAME[1]}" prefix="$PRG" msg
-  case "$status" in
-    success) prefix+=": ${GREEN}✓${NC}" ;;
-    warn)    prefix+=": $YELLOW$status$NC" ;;
-    info)    prefix+=": $CYAN$status$NC" ;;
-    error)   prefix+=": $RED$status$NC" ;;
-    *)       prefix+=": $status" ;;
-  esac
-  for msg in "$@"; do printf '%s: %s\n' "$prefix" "$msg"; done
+# Error message function
+error() {
+  local -- msg
+  for msg in "$@"; do
+    >&2 printf '%s: %serror%s: %s\n' "$SCRIPT_NAME" "$RED" "$NC" "$msg"
+  done
 }
-
-# Conditional output based on verbosity
-vecho() { ((VERBOSE)) || return 0; _msg "$@"; }
-success() { ((VERBOSE)) || return 0; >&2 _msg "$@"; }
-warn() { ((VERBOSE)) || return 0; >&2 _msg "$@"; }
-info() { ((VERBOSE)) || return 0; >&2 _msg "$@"; }
-
-# Unconditional output
-error() { >&2 _msg "$@"; }
 die() { (($# > 1)) && error "${@:2}"; exit "${1:-0}"; }
 
 # Validate argument presence
@@ -116,10 +97,10 @@ _cleanup() {
 usage() {
   local -i exitcode=${1:-0}
   cat <<EOT
-$PRG $VERSION - Typewriter-style output with variable speed and indent
+$SCRIPT_NAME $VERSION - Typewriter-style output with variable speed and indent
 
 Usage:
-  $PRG [OPTIONS] text||<stdin
+  $SCRIPT_NAME [OPTIONS] text||<stdin
 
   text    text to 'type' (optional if reading from stdin)
 
@@ -145,28 +126,28 @@ Environment:
 
 Examples:
   # Basic usage with different speeds
-  $PRG -s fast "This types quickly"
-  $PRG -s slow "This types slowly"
+  $SCRIPT_NAME -s fast "This types quickly"
+  $SCRIPT_NAME -s slow "This types slowly"
 
   # Using stdin input
-  echo "This is from stdin" | $PRG -s normal
-  cat file.txt | $PRG -s xxfast
+  echo "This is from stdin" | $SCRIPT_NAME -s normal
+  cat file.txt | $SCRIPT_NAME -s xxfast
 
   # Indentation and formatting
-  $PRG -i 4 "This has 4-space indent"
-  $PRG -c 32 "This is green text"
-  $PRG -c "1;31" "This is bold red text"
+  $SCRIPT_NAME -i 4 "This has 4-space indent"
+  $SCRIPT_NAME -c 32 "This is green text"
+  $SCRIPT_NAME -c "1;31" "This is bold red text"
 
   # Combined options
-  $PRG -s fast -i 2 -c 36 "Fast cyan text with indent"
-  $PRG -s slow -c 33 -n "Yellow text without newline"
+  $SCRIPT_NAME -s fast -i 2 -c 36 "Fast cyan text with indent"
+  $SCRIPT_NAME -s slow -c 33 -n "Yellow text without newline"
 
   # Using environment variables
   export TW_SPEED=fast TW_INDENT=2
-  $PRG "Uses fast speed and 2-space indent"
+  $SCRIPT_NAME "Uses fast speed and 2-space indent"
 
   # Multi-line text with literal newlines
-  $PRG "First line\\nSecond line\\nThird line"
+  $SCRIPT_NAME "First line\\nSecond line\\nThird line"
 
 EOT
   exit "$exitcode"
@@ -213,12 +194,12 @@ typewriter() {
         usage 0
         ;;
       -V|--version)
-        echo "$PRG $VERSION"
+        echo "$SCRIPT_NAME $VERSION"
         exit 0
         ;;
       # Handle combined short options
       -[sicnhV]*)
-        #shellcheck disable=SC2046  # Intentional word splitting
+        #shellcheck disable=SC2046  # Intentional word splitting for flag expansion
         set -- '' $(printf -- "-%c " $(grep -o . <<<"${1:1}")) "${@:2}"
         ;;
       -*)
