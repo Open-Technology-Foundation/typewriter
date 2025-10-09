@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./typewriter:*)",
+      "Bash(source:*)",
+      "Bash(tw:*)",
+      "Bash(bash -n:*)",
+      "Bash(cat:*)",
+      "Bash(echo:*)",
+      "Bash(./test_typewriter.sh:*)",
+      "Bash(./test_quick.sh:*)",
+      "Bash(bash:*)",
+      "Bash(./run_tests.sh)",
+      "Bash(tee:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
